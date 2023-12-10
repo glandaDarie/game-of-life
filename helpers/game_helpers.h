@@ -6,10 +6,21 @@
 #include <unordered_map>
 #include <any>
 #include "../utils/logger.h"
+#include <string>
 
-void generateBoard(std::vector<std::vector<int>>& board, float probability_alive_threshold = 0.3);
+template<typename... Args>
+std::vector<std::vector<int>> generateBoard(
+    std::function<std::vector<std::vector<int>>(Args...)> boardCallback, 
+    std::string boardInfo,
+    Args&&... args) {
+    return boardInfo == "test"
+        ? boardCallback() 
+        : boardCallback(std::forward<Args>(args)...);
+}
+std::vector<std::vector<int>> randomBoard(float probabilityAliveThreshold = 0.3f);
 void displayBoard(const std::vector<std::vector<int>>& board, std::string message = "");
-void calculateNextGenerationParallelized(std::vector<std::vector<int>>& board);
+std::vector<std::vector<int>> testLeetcode();
+int numberNeighbours(std::vector<std::vector<int>>& board, int i, int j);
 void runGenerations(
     std::vector<std::vector<int>>& board,
     Logger* logger = nullptr,

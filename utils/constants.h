@@ -6,6 +6,7 @@ namespace Constants {
     extern int BOARD_ROWS;
     extern int BOARD_COLUMNS;
     extern int CHUNK_SIZE;
+    extern const float EPSILON;
 } 
 
 #endif 

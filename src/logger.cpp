@@ -8,16 +8,16 @@ Logger::Logger(const std::string& filename) {
         std::cerr << "Failed to get current working directory" << std::endl;
         return;
     }
-    const std::string current_directory = std::string(cwd);
-    if (current_directory.empty()) {
+    const std::string currentDirectory = std::string(cwd);
+    if (currentDirectory.empty()) {
         std::cerr << "Error obtaining parent directory!" << std::endl;
         return;
     }
 
-    const std::string absolute_path = current_directory + "/" + filename;
+    const std::string absolutePath = currentDirectory + "/" + filename;
 
     try {
-        logFile.open(absolute_path);
+        logFile.open(absolutePath);
         if (!logFile.is_open()) {
             throw std::runtime_error("Error opening log file!");
         }
