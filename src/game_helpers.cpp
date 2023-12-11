@@ -174,9 +174,6 @@ void runGenerations(
     Logger* logger = nullptr,
     const std::unordered_map<std::string, std::any> kwargs = {}
     ) {
-    std::__1::chrono::steady_clock::time_point start;
-    std::__1::chrono::steady_clock::time_point end;
-    double seconds;
     int generations;
     bool broadcast, serial, parallel1d, parallel2d;
 
