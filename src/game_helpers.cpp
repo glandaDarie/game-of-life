@@ -112,31 +112,47 @@ void calculateNextGenerationParallelized1D(std::vector<std::vector<int>>& board,
 }
 
 void calculateNextGenerationParallelized2D(std::vector<std::vector<int>>& board, Logger* logger = nullptr) {
+    int numChunksRows = (Constants::BOARD_ROWS + Constants::CHUNK_SIZE - 1) / Constants::CHUNK_SIZE;
+    int numChunksCols = (Constants::BOARD_COLUMNS + Constants::CHUNK_SIZE - 1) / Constants::CHUNK_SIZE;
+
     #pragma omp parallel for collapse(2)
-    for (int chunkRow = 0; chunkRow < 2; ++chunkRow) {
-        for (int chunkCol = 0; chunkCol < 2; ++chunkCol) {
+    for (int chunkRow = 0; chunkRow < numChunksRows; ++chunkRow) {
+        for (int chunkCol = 0; chunkCol < numChunksCols; ++chunkCol) {
             int startRow = chunkRow * Constants::CHUNK_SIZE;
             int startCol = chunkCol * Constants::CHUNK_SIZE;
-            for (int i = startRow; i < startRow + Constants::CHUNK_SIZE; ++i) {
-                for (int j = startCol; j < startCol + Constants::CHUNK_SIZE; ++j) {
-                    int liveNeighbors = 0;
-                    for (int x = -1; x <= 1; ++x) {
-                        for (int y = -1; y <= 1; ++y) {
-                            if (x == 0 && y == 0) {
-                                continue;
-                            }; 
-                            int neighborX = i + x; 
-                            int neighborY = j + y;
-                            if (neighborX >= 0 && neighborX < Constants::BOARD_ROWS && neighborY >= 0 && neighborY < Constants::BOARD_COLUMNS) {
-                                liveNeighbors += board[neighborX][neighborY];
-                            }
+            int endRow = std::min(startRow + Constants::CHUNK_SIZE, Constants::BOARD_ROWS);
+            int endCol = std::min(startCol + Constants::CHUNK_SIZE, Constants::BOARD_COLUMNS);
+
+            for (int i = startRow; i < endRow; ++i) {
+                for (int j = startCol; j < endCol; ++j) {
+                    int aliveNeighbours = numberNeighbours(board, i, j);
+                    if ((aliveNeighbours == 4 && board[i][j]) || aliveNeighbours == 3) {
+                        if (logger != nullptr) {
+                            int threadID = omp_get_thread_num();
+                            logger->log(LogLevel::INFO, "Thread " + std::to_string(threadID) + ": board element: [" + std::to_string(i) + "][" + std::to_string(j) + "]");
                         }
+                        board[i][j] |= 2; 
                     }
-                    if (board[i][j] == 1 && (liveNeighbors < 2 || liveNeighbors > 3)) {
-                        board[i][j] = 0;
-                    } else if (board[i][j] == 0 && liveNeighbors == 3) {
-                        board[i][j] = 1;
+                }
+            }
+        }
+    }
+
+    #pragma omp parallel for collapse(2)
+    for (int chunkRow = 0; chunkRow < numChunksRows; ++chunkRow) {
+        for (int chunkCol = 0; chunkCol < numChunksCols; ++chunkCol) {
+            int startRow = chunkRow * Constants::CHUNK_SIZE;
+            int startCol = chunkCol * Constants::CHUNK_SIZE;
+            int endRow = std::min(startRow + Constants::CHUNK_SIZE, Constants::BOARD_ROWS);
+            int endCol = std::min(startCol + Constants::CHUNK_SIZE, Constants::BOARD_COLUMNS);
+
+            for (int i = startRow; i < endRow; ++i) {
+                for (int j = startCol; j < endCol; ++j) {
+                    if (logger != nullptr) {
+                        int threadID = omp_get_thread_num();
+                        logger->log(LogLevel::INFO, "Thread " + std::to_string(threadID) + ": board element: [" + std::to_string(i) + "][" + std::to_string(j) + "]");
                     }
+                    board[i][j] >>= 1;
                 }
             }
         }
@@ -152,11 +168,11 @@ void computeGameOfLife(
     bool trace = false) {
     std::__1::chrono::steady_clock::time_point start = std::chrono::high_resolution_clock::now();
     for (int generation = 0; generation < generations; ++generation) {
+        nextGenerationCallback(board, nullptr);
         if (generation == generations - 1) {
             std::cout << "Final board" << std::endl << std::endl;
             displayBoard(board); 
         }
-        nextGenerationCallback(board, nullptr);
         if(trace) {
             displayBoard(board); 
             std::cout << std::endl;
@@ -220,7 +236,7 @@ void runGenerations(
         std::cout << "\nParallelized 1D version:" << std::endl;
         computeGameOfLife(calculateNextGenerationParallelized1D, board, generations, logger, "Parallel 1D");
 
-        // std::cout << "\nParallelized 2D version:" << std::endl;
-        // computeGameOfLife(calculateNextGenerationParallelized2D, board, generations, logger, "Parallel 2D");
+        std::cout << "\nParallelized 2D version:" << std::endl;
+        computeGameOfLife(calculateNextGenerationParallelized2D, board, generations, logger, "Parallel 2D");
     }
 }
