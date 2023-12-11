@@ -28,22 +28,22 @@ int main(int argc, char* argv[]) {
     Constants::CHUNK_SIZE = result["chunk_size"].as<int>();
     bool isTestLeetcode = result["test_leetcode"].as<bool>();
 
-    Logger logger("logfile.txt");
+    Logger logger("logs.txt");
     logger.log(LogLevel::INFO, "NUM_GENERATIONS: " + std::to_string(Constants::NUM_GENERATIONS));
     logger.log(LogLevel::INFO, "BOARD_ROWS: " + std::to_string(Constants::BOARD_ROWS));
     logger.log(LogLevel::INFO, "BOARD_COLUMNS: " + std::to_string(Constants::BOARD_COLUMNS));
     logger.log(LogLevel::INFO, "CHUNK_SIZE: " + std::to_string(Constants::CHUNK_SIZE));
 
-    std::unordered_map<std::string, std::any> kwargs = {
-        {"num_generations", Constants::NUM_GENERATIONS},
-    };
     std::function<std::vector<std::vector<int>>()> boardFn = [&]() -> std::vector<std::vector<int>> {
         return isTestLeetcode ? testLeetcode() : randomBoard();
     };
 
     std::vector<std::vector<int>> board = generateBoard(boardFn, "test");
-    displayBoard(board);
-    std::cout << std::endl;
+    displayBoard(board, "Starting board");
+    std::unordered_map<std::string, std::any> kwargs = {
+        {"num_generations", Constants::NUM_GENERATIONS},
+        {"broadcast", true}
+    };
     runGenerations(board, &logger, kwargs);
     return 0;
 }
