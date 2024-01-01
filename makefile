@@ -1,4 +1,12 @@
-CXX = clang++
+COMPILER ?= clang++
+
+ifeq ($(COMPILER), clang++)
+	COMPILER = clang++
+else ifeq ($(COMPILER), mpic++)
+	COMPILER = mpic++
+endif
+
+CXX = $(COMPILER)
 CXXFLAGS = -std=c++17 -Xpreprocessor -fopenmp
 LDFLAGS = -I /usr/local/opt/libomp/include -L /usr/local/opt/libomp/lib -lomp
 

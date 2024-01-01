@@ -10,6 +10,7 @@
 #include "helpers/game_helpers.h"
 #include <functional>
 #include <unistd.h>
+#include <mpi.h>
 
 int main(int argc, char* argv[]) {
     cxxopts::Options options("Game of Life", "Parallelize the game of life using the OpenMP Framework");
