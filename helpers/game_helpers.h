@@ -23,6 +23,7 @@ std::vector<std::vector<int>> testLeetcode();
 int numberNeighbours(std::vector<std::vector<int>>& board, int i, int j);
 void runGenerations(
     std::vector<std::vector<int>>& board,
+    std::string algorithm,
     Logger* logger = nullptr,
     const std::unordered_map<std::string, std::any> kwargs = {}
 );

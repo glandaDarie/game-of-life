@@ -13,6 +13,7 @@
 #include <functional>
 #include <algorithm>
 #include <chrono>
+#include <mpi.h>
 
 std::vector<std::vector<int>> randomBoard(float probabilityAliveThreshold = 0.3f) {
     std::vector<std::vector<int>> board(Constants::BOARD_ROWS, std::vector<int>(Constants::BOARD_COLUMNS, 0));
@@ -63,7 +64,7 @@ int numberNeighbours(std::vector<std::vector<int>>& board, int i, int j) {
     return aliveNeighbours;
 }
 
-void calculateNextGenerationSyncronous(std::vector<std::vector<int>>& board, Logger* logger = nullptr, const bool display = false) {
+void calculateNextGenerationSyncronous(std::vector<std::vector<int>>& board, int rank, Logger* logger = nullptr, const bool display = false) {
     for (int i = 0; i < Constants::BOARD_ROWS; ++i) {
         for (int j = 0; j < Constants::BOARD_COLUMNS; ++j) {
             int aliveNeighbours = numberNeighbours(board, i, j);
@@ -85,7 +86,7 @@ void calculateNextGenerationSyncronous(std::vector<std::vector<int>>& board, Log
     }
 }
 
-void calculateNextGenerationParallelized1D(std::vector<std::vector<int>>& board, Logger* logger = nullptr, const bool display = false) {
+void ompCalculateNextGenerationParallelized1D(std::vector<std::vector<int>>& board, int rank, Logger* logger = nullptr, const bool display = false) {
     #pragma omp parallel for collapse(1)
      for (int i = 0; i < Constants::BOARD_ROWS; ++i) {
         int threadID = omp_get_thread_num();
@@ -111,7 +112,7 @@ void calculateNextGenerationParallelized1D(std::vector<std::vector<int>>& board,
     }
 }
 
-void calculateNextGenerationParallelized2D(std::vector<std::vector<int>>& board, Logger* logger = nullptr, const bool display = false) {
+void ompCalculateNextGenerationParallelized2D(std::vector<std::vector<int>>& board, int rank, Logger* logger = nullptr, const bool display = false) {
     int numChunksRows = (Constants::BOARD_ROWS + Constants::CHUNK_SIZE - 1) / Constants::CHUNK_SIZE;
     int numChunksCols = (Constants::BOARD_COLUMNS + Constants::CHUNK_SIZE - 1) / Constants::CHUNK_SIZE;
 
@@ -157,17 +158,57 @@ void calculateNextGenerationParallelized2D(std::vector<std::vector<int>>& board,
     }
 }
 
+void mpiCalculateNextGenerationParallelized2D(
+    std::vector<std::vector<int>>& board, 
+    int rank,
+    Logger* logger = nullptr, 
+    const bool display = false) {
+    const int numRows = board.size();
+    const int numCols = board[0].size();
+    const int quarterRows = numRows / 2;
+    const int quarterCols = numCols / 2;
+
+    const int startRow = (rank / 2) * quarterRows;
+    const int endRow = std::min(startRow + quarterRows, numRows);
+    const int startCol = (rank % 2) * quarterCols;
+    const int endCol = std::min(startCol + quarterCols, numCols);
+
+    for (int i = startRow; i < endRow; ++i) {
+        for (int j = startCol; j < endCol; ++j) {
+            int aliveNeighbours = numberNeighbours(board, i, j);
+            if ((aliveNeighbours == 4 && board[i][j]) || aliveNeighbours == 3) {
+                board[i][j] |= 2;
+                if (display) {
+                    logger->log(LogLevel::INFO, "Thread " + std::to_string(rank) + ": board element: [" + std::to_string(i) + "][" + std::to_string(j) + "]");
+                } 
+            }
+        }
+    }
+
+    MPI_Barrier(MPI_COMM_WORLD);
+
+    for (int i = startRow; i < endRow; ++i) {
+        for (int j = startCol; j < endCol; ++j) {
+            board[i][j] >>= 1;
+            if (display) {
+                logger->log(LogLevel::INFO, "Thread " + std::to_string(rank) + ": board element: [" + std::to_string(i) + "][" + std::to_string(j) + "]");
+            }
+        }
+    }
+}
+
 void computeGameOfLife(
-    void (*nextGenerationCallback)(std::vector<std::vector<int>>&, Logger*, bool),
+    void (*nextGenerationCallback)(std::vector<std::vector<int>>&, int, Logger*, bool),
     std::vector<std::vector<int>> board,
     int generations, 
+    int rank, 
     Logger* logger = nullptr,
     const bool display = false,
     std::string executionType = "Serial",
     bool trace = false) {
     std::__1::chrono::steady_clock::time_point start = std::chrono::high_resolution_clock::now();
     for (int generation = 0; generation < generations; ++generation) {
-        nextGenerationCallback(board, logger, display);
+        nextGenerationCallback(board, rank, logger, display);
         if (generation == generations - 1) {
             std::cout << "Final board" << std::endl << std::endl;
             displayBoard(board); 
@@ -186,10 +227,11 @@ void computeGameOfLife(
 
 void runGenerations(
     std::vector<std::vector<int>>& board,
+    std::string algorithm,
     Logger* logger = nullptr,
     const std::unordered_map<std::string, std::any> kwargs = {}
     ) {
-    int generations;
+    int generations, rank;
     bool trace, display, broadcast, serial, parallel1d, parallel2d;
 
     try {
@@ -220,36 +262,53 @@ void runGenerations(
         return;
     }
 
-    if(!broadcast) {
-        try {
-            serial = std::any_cast<bool>(kwargs.at("serial"));
-            parallel1d = std::any_cast<bool>(kwargs.at("parallel_1d"));
-            parallel2d = std::any_cast<bool>(kwargs.at("parallel_2d"));
-        } catch(const std::bad_any_cast& e) {
-            std::cerr << "Exception caught: " << e.what() << std::endl;
-            return;
-        }
+    try {
+        rank = std::any_cast<int>(kwargs.at("rank"));
+    } catch(const std::bad_any_cast& e) {
+        std::cerr << "Exception caught for rank: " << e.what() << std::endl;
+        return;
+    }
 
-        if(serial) {
-            std::cout << "Synchronous version:" << std::endl;
-            computeGameOfLife(calculateNextGenerationSyncronous, board, generations, logger, display, "Serial", trace);
-        }
-        if(parallel1d) {
-            std::cout << "\nParallelized 1D version:" << std::endl;
-            computeGameOfLife(calculateNextGenerationParallelized1D, board, generations, logger, display, "Parallel 1D", trace);
-        }
-        if(parallel2d) {
-            std::cout << "\nParallelized 2D version:" << std::endl;
-            computeGameOfLife(calculateNextGenerationParallelized2D, board, generations, logger, display, "Parallel 2D", trace);
+    if(!broadcast) {
+        if(algorithm == "OMP") {
+            try {
+                serial = std::any_cast<bool>(kwargs.at("serial"));
+                parallel1d = std::any_cast<bool>(kwargs.at("parallel_1d"));
+                parallel2d = std::any_cast<bool>(kwargs.at("parallel_2d"));
+            } catch(const std::bad_any_cast& e) {
+                std::cerr << "Exception caught: " << e.what() << std::endl;
+                return;
+            }
+            if(serial) {
+                std::cout << "Synchronous version (OMP):" << std::endl;
+                computeGameOfLife(calculateNextGenerationSyncronous, board, generations, rank, logger, display, "Serial - OMP", trace);
+            }
+            if(parallel1d) {
+                std::cout << "\nParallelized 1D version (OMP):" << std::endl;
+                computeGameOfLife(ompCalculateNextGenerationParallelized1D, board, generations, rank, logger, display, "Parallel 1D - OMP", trace);
+            }
+            if(parallel2d) {
+                std::cout << "\nParallelized 2D version (OMP):" << std::endl;
+                computeGameOfLife(ompCalculateNextGenerationParallelized2D, board, generations, rank, logger, display, "Parallel 2D - OMP", trace);
+            }
+        } else {
+            std::cout << "\nParallelized 2D version (MPI):" << std::endl;
+            computeGameOfLife(mpiCalculateNextGenerationParallelized2D, board, generations, rank, logger, display, "Parallel 2D - MPI", trace);
         }
     } else {
-        std::cout << "Synchronous version:" << std::endl;
-        computeGameOfLife(calculateNextGenerationSyncronous, board, generations, logger, display, "Serial", trace);
+        if(algorithm == "OMP") {
+            std::cout << "Synchronous version (OMP):" << std::endl;
+            computeGameOfLife(calculateNextGenerationSyncronous, board, generations, rank, logger, display, "Serial - OMP", trace);
 
-        std::cout << "\nParallelized 1D version:" << std::endl;
-        computeGameOfLife(calculateNextGenerationParallelized1D, board, generations, logger, display, "Parallel 1D", trace);
+            std::cout << "\nParallelized 1D version (OMP):" << std::endl;
+            computeGameOfLife(ompCalculateNextGenerationParallelized1D, board, generations, rank, logger, display, "Parallel 1D - OMP", trace);
 
-        std::cout << "\nParallelized 2D version:" << std::endl;
-        computeGameOfLife(calculateNextGenerationParallelized2D, board, generations, logger, display, "Parallel 2D", trace);
+            std::cout << "\nParallelized 2D version (OMP):" << std::endl;
+            computeGameOfLife(ompCalculateNextGenerationParallelized2D, board, generations, rank, logger, display, "Parallel 2D - OMP", trace);
+        }
+        else {
+            std::cout << "\nParallelized 2D version (MPI):" << std::endl;
+            computeGameOfLife(mpiCalculateNextGenerationParallelized2D, board, generations, rank, logger, display, "Parallel 2D - MPI", trace);
+        }
     }
 }

@@ -21,7 +21,8 @@ int main(int argc, char* argv[]) {
         ("s,chunk_size", "Chunk size", cxxopts::value<int>()->default_value(std::to_string(Constants::CHUNK_SIZE)))
         ("tl,test_leetcode", "Test Leetcode", cxxopts::value<bool>()->default_value("false"))
         ("disp,display_logging_trace", "Display logging trace", cxxopts::value<bool>()->default_value("false"))
-        ("tr,trace", "Trace", cxxopts::value<bool>()->default_value("false"));
+        ("tr,trace", "Trace", cxxopts::value<bool>()->default_value("false"))
+        ("algo,algorithm", "Algorithm", cxxopts::value<std::string>()->default_value("OMP"));
 
     const cxxopts::ParseResult result = options.parse(argc, argv);
 
@@ -32,6 +33,8 @@ int main(int argc, char* argv[]) {
     bool isTestLeetcode = result["test_leetcode"].as<bool>();
     bool displayLoggingTrace = result["display_logging_trace"].as<bool>();
     bool trace = result["trace"].as<bool>();
+    std::string algorithm = result["algorithm"].as<std::string>();
+    // std::cout << "Algorithm" + algorithm;
 
     Logger logger("logs.txt");
     logger.log(LogLevel::INFO, "NUM_GENERATIONS: " + std::to_string(Constants::NUM_GENERATIONS));
@@ -39,10 +42,19 @@ int main(int argc, char* argv[]) {
     logger.log(LogLevel::INFO, "BOARD_COLUMNS: " + std::to_string(Constants::BOARD_COLUMNS));
     logger.log(LogLevel::INFO, "CHUNK_SIZE: " + std::to_string(Constants::CHUNK_SIZE));
     logger.log(LogLevel::INFO, "DISPLAY_LOGGING_TRACE: " + std::to_string(displayLoggingTrace));
+    logger.log(LogLevel::INFO, "ALGORITHM: " + algorithm);
 
     std::function<std::vector<std::vector<int>>()> boardFn = [&]() -> std::vector<std::vector<int>> {
         return isTestLeetcode ? testLeetcode() : randomBoard();
     };
+    
+    int rank, numProcesses;
+    // temporary work around, because the callback type does not match the params of the other implementations
+    if(algorithm == "MPI") { 
+        MPI_Init(&argc, &argv);
+        MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+        MPI_Comm_size(MPI_COMM_WORLD, &numProcesses);
+    }
 
     std::vector<std::vector<int>> board = generateBoard(boardFn, "test");
     displayBoard(board, "Starting board");
@@ -50,8 +62,15 @@ int main(int argc, char* argv[]) {
         {"num_generations", Constants::NUM_GENERATIONS},
         {"broadcast", true},
         {"display", displayLoggingTrace},
-        {"trace", trace}
+        {"trace", trace}, 
+        {"rank", rank},
+        {"numProcesses", numProcesses}
     };
-    runGenerations(board, &logger, kwargs);
+
+    runGenerations(board, algorithm, &logger, kwargs);
+    
+    if(algorithm == "MPI") {
+        MPI_Finalize();
+    }
     return 0;
 }

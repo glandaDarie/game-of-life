@@ -28,6 +28,12 @@ random_test3: task
 random_test4: task
 	./task -r 1000 -c 100 -g 10000 -s 50
 
+random_test5: task
+	mpirun -np 2 ./task -r 10 -c 10 -g 10000 -s 50 --algo MPI
+
+random_test6: task
+	./task -r 10 -c 10 -g 10000 -s 50 --algo MPI
+
 generic_test1: task
 	./task --tl -g 1
 
@@ -39,6 +45,12 @@ generic_test3: task
 
 generic_test4: task
 	./task --tl --trace -g 90
+
+generic_test5: task	
+	./task --tl --algo MPI
+
+generic_test6: task	
+	mpirun -np 2 ./task --tl --algo MPI
 
 .PHONY: clean
 clean:
