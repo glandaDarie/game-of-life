@@ -162,39 +162,78 @@ void mpiCalculateNextGenerationParallelized2D(
     std::vector<std::vector<int>>& board, 
     int rank,
     Logger* logger = nullptr, 
-    const bool display = false) {
+    const bool display = false
+) {
     const int numRows = board.size();
     const int numCols = board[0].size();
-    const int quarterRows = numRows / 2;
-    const int quarterCols = numCols / 2;
+    const int halfRows = numRows / 2; 
 
-    const int startRow = (rank / 2) * quarterRows;
-    const int endRow = std::min(startRow + quarterRows, numRows);
-    const int startCol = (rank % 2) * quarterCols;
-    const int endCol = std::min(startCol + quarterCols, numCols);
+    int startRow, endRow;
+
+    if(rank == 0) {
+        startRow = 0;
+        endRow = halfRows;
+    } else if(rank == 1) {
+        startRow = halfRows;
+        endRow = numRows;
+    }
 
     for (int i = startRow; i < endRow; ++i) {
-        for (int j = startCol; j < endCol; ++j) {
+        for (int j = 0; j < numCols; ++j) {
             int aliveNeighbours = numberNeighbours(board, i, j);
             if ((aliveNeighbours == 4 && board[i][j]) || aliveNeighbours == 3) {
                 board[i][j] |= 2;
                 if (display) {
-                    logger->log(LogLevel::INFO, "Thread " + std::to_string(rank) + ": board element: [" + std::to_string(i) + "][" + std::to_string(j) + "]");
-                } 
+                    logger->log(LogLevel::INFO, "Rank " + std::to_string(rank) + ": board element: [" + std::to_string(i) + "][" + std::to_string(j) + "]");
+                }
             }
         }
+    }
+
+    for (int i = startRow; i < endRow; ++i) {
+        for (int j = 0; j < numCols; ++j) {
+            if (display) {
+                logger->log(LogLevel::INFO, "Rank " + std::to_string(rank) + ": board element: [" + std::to_string(i) + "][" + std::to_string(j) + "]");
+            }
+            board[i][j] >>= 1;
+        }
+    }
+    std::cout << std::endl;
+
+    MPI_Barrier(MPI_COMM_WORLD);
+
+    std::vector<int> sendBuffer((endRow - startRow) * numCols, 0);
+    std::vector<int> receiveBuffer((endRow - startRow) * numCols, 0);
+
+    int iteration = 0;
+    for(int i = startRow; i < endRow; ++i) {
+        for(int j = 0; j < numCols; ++j) {
+            sendBuffer[iteration++] = board[i][j];
+        }
+    }
+
+    if(rank == 0) {
+        MPI_Send(sendBuffer.data(), (endRow - startRow) * numCols, MPI_INT, 1, 0, MPI_COMM_WORLD);
+        MPI_Recv(receiveBuffer.data(), (endRow - startRow) * numCols, MPI_INT, 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    } else if(rank == 1) {
+        MPI_Send(sendBuffer.data(), (endRow - startRow) * numCols, MPI_INT, 0, 0, MPI_COMM_WORLD);
+        MPI_Recv(receiveBuffer.data(), (endRow - startRow) * numCols, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     }
 
     MPI_Barrier(MPI_COMM_WORLD);
 
-    for (int i = startRow; i < endRow; ++i) {
-        for (int j = startCol; j < endCol; ++j) {
-            board[i][j] >>= 1;
-            if (display) {
-                logger->log(LogLevel::INFO, "Thread " + std::to_string(rank) + ": board element: [" + std::to_string(i) + "][" + std::to_string(j) + "]");
-            }
+    iteration = 0;
+    int offset = (rank == 0) ? 2 : 0;
+    int limit = (rank == 0) ? 4 : 2;
+
+    for(int i = offset; i < limit; ++i) {
+        for(int j = 0; j < numCols; ++j) {
+            board[i][j] = receiveBuffer[iteration++];
         }
     }
+
+    std::cout << std::endl;
+    MPI_Barrier(MPI_COMM_WORLD);
 }
 
 void computeGameOfLife(

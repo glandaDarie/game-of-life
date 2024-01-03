@@ -49,6 +49,7 @@ int main(int argc, char* argv[]) {
     };
     
     int rank, numProcesses;
+
     // temporary work around, because the callback type does not match the params of the other implementations
     if(algorithm == "MPI") { 
         MPI_Init(&argc, &argv);

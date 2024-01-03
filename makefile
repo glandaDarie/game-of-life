@@ -1,13 +1,15 @@
 COMPILER ?= clang++
+CXXFLAGS ?= -std=c++17 -Xpreprocessor -fopenmp
 
 ifeq ($(COMPILER), clang++)
 	COMPILER = clang++
 else ifeq ($(COMPILER), mpic++)
 	COMPILER = mpic++
+	CXXFLAGS = -std=c++17
 endif
 
 CXX = $(COMPILER)
-CXXFLAGS = -std=c++17 -Xpreprocessor -fopenmp
+
 LDFLAGS = -I /usr/local/opt/libomp/include -L /usr/local/opt/libomp/lib -lomp
 
 SRC_DIR = src
@@ -50,7 +52,10 @@ generic_test5: task
 	./task --tl --algo MPI
 
 generic_test6: task	
-	mpirun -np 2 ./task --tl --algo MPI
+	mpirun -np 2 ./task --tl -g 1 --algo MPI
+
+generic_test7: task	
+	mpiexec -n 6  ./task --tl --algo MPI
 
 .PHONY: clean
 clean:
