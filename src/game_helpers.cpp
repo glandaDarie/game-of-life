@@ -169,15 +169,8 @@ void mpiCalculateNextGenerationParallelized2D(
     const int numCols = board[0].size();
     const int halfRows = numRows / 2; 
 
-    int startRow, endRow;
-
-    if(rank == 0) {
-        startRow = 0;
-        endRow = halfRows;
-    } else if(rank == 1) {
-        startRow = halfRows;
-        endRow = numRows;
-    }
+    const int startRow = (rank == 0) ? 0 : halfRows;
+    const int endRow = (rank == 0) ? halfRows : numRows;
 
     for (int i = startRow; i < endRow; ++i) {
         for (int j = 0; j < numCols; ++j) {
