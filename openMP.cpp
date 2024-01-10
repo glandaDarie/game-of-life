@@ -34,7 +34,6 @@ int main(int argc, char* argv[]) {
     bool displayLoggingTrace = result["display_logging_trace"].as<bool>();
     bool trace = result["trace"].as<bool>();
     std::string algorithm = result["algorithm"].as<std::string>();
-    // std::cout << "Algorithm" + algorithm;
 
     Logger logger("logs.txt");
     logger.log(LogLevel::INFO, "NUM_GENERATIONS: " + std::to_string(Constants::NUM_GENERATIONS));
@@ -51,14 +50,14 @@ int main(int argc, char* argv[]) {
     int rank, numProcesses;
 
     // temporary work around, because the callback type does not match the params of the other implementations
-    if(algorithm == "MPI") { 
-        MPI_Init(&argc, &argv);
-        MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-        MPI_Comm_size(MPI_COMM_WORLD, &numProcesses);
-    }
+    MPI_Init(&argc, &argv);
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &numProcesses);
 
     std::vector<std::vector<int>> board = generateBoard(boardFn, "test");
-    displayBoard(board, "Starting board");
+    if(rank == 0) {
+        displayBoard(board, "Starting board");
+    }
     std::unordered_map<std::string, std::any> kwargs = {
         {"num_generations", Constants::NUM_GENERATIONS},
         {"broadcast", true},
@@ -69,9 +68,7 @@ int main(int argc, char* argv[]) {
     };
 
     runGenerations(board, algorithm, &logger, kwargs);
-    
-    if(algorithm == "MPI") {
-        MPI_Finalize();
-    }
+
+    MPI_Finalize();
     return 0;
 }

@@ -55,6 +55,9 @@ generic_test6: task
 	mpirun -np 2 ./task --tl -g 1 --algo MPI
 
 generic_test7: task	
+	mpirun -np 2 ./task --tl -g 1000 --algo MPI
+
+generic_test8: task	
 	mpiexec -n 6  ./task --tl --algo MPI
 
 .PHONY: clean
