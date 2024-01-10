@@ -212,9 +212,10 @@ void mpiCalculateNextGenerationParallelized2D(
 
     MPI_Barrier(MPI_COMM_WORLD);
 
+    const int offset = (rank == 0) ? halfRows : 0;
+    const int limit = (rank == 0) ? numRows : halfRows;
+
     iteration = 0;
-    int offset = (rank == 0) ? halfRows : 0;
-    int limit = (rank == 0) ? numRows : halfRows;
     for(int i = offset; i < limit; ++i) {
         for(int j = 0; j < numCols; ++j) {
             board[i][j] = receiveBuffer[iteration++];
